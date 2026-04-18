@@ -1,5 +1,6 @@
 import streamlit as st
 import numpy as np
+import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 
 # -------------------------------
@@ -17,6 +18,10 @@ RESIST_CONSTANTS = {"AZ 1505": 31.62}
 # -------------------------------
 if 'current_thickness' not in st.session_state:
     st.session_state.current_thickness = 0.0
+if 'selected_resist' not in st.session_state:
+    st.session_state.selected_resist = "AZ 1505"
+if 'resist_status' not in st.session_state:
+    st.session_state.resist_status = "Unbaked"
 
 # -------------------------------
 # 3D BLOCK FUNCTION
@@ -39,7 +44,7 @@ def create_block(x0, y0, dx, dy, z0, dz, color, opacity=1.0):
     )
 
 # -------------------------------
-# MASK
+# MASK FUNCTION
 # -------------------------------
 def generate_mask(size, pattern):
     mask = np.zeros((size, size))
@@ -56,16 +61,10 @@ def generate_mask(size, pattern):
     return mask
 
 # -------------------------------
-# RPM FUNCTION
-# -------------------------------
-def calculate_thickness(rpm):
-    k = RESIST_CONSTANTS["AZ 1505"]
-    return k / np.sqrt(rpm)
-
-# -------------------------------
 # MAIN UI
 # -------------------------------
 st.title("🔬 Virtual Lab: Photolithography Process")
+st.markdown("Explore the deposition and baking of positive photoresists on a silicon substrate.")
 
 tab_aim, tab_theory, tab_procedure, tab_simulation, tab_quiz = st.tabs([
     "🎯 Aim", "📚 Theory", "📝 Procedure", "⚙️ Simulation", "🧠 Quiz"
@@ -76,117 +75,141 @@ tab_aim, tab_theory, tab_procedure, tab_simulation, tab_quiz = st.tabs([
 # -------------------------------
 with tab_aim:
     st.header("Objective")
-    st.write("Understand spin coating, baking, and lithography patterning.")
+    st.markdown("""
+    * Understand spin coating and thickness relation  
+    * Study soft bake effects  
+    * Visualize lithography in 3D  
+    """)
 
 # -------------------------------
 # THEORY
 # -------------------------------
 with tab_theory:
     st.header("Theory")
-    st.write("Thickness ∝ 1 / √RPM. Soft bake removes solvent.")
+    st.markdown("""
+    Thickness follows:
+
+    t = k / √RPM
+
+    Soft bake removes solvent and stabilizes resist.
+    """)
 
 # -------------------------------
 # PROCEDURE
 # -------------------------------
 with tab_procedure:
     st.header("Procedure")
-    st.write("1. Spin coat\n2. Bake\n3. Expose\n4. Develop")
+    st.markdown("""
+    1. Spin coat  
+    2. Bake  
+    3. Expose  
+    4. Develop  
+    """)
 
 # -------------------------------
-# 🔥 SIMULATION (REPLACED)
+# 🔥 SIMULATION (UPDATED TO 3D)
 # -------------------------------
 with tab_simulation:
 
     st.header("3D Lithography Simulation")
 
+    st.sidebar.title("Lab Controls")
+
+    rpm = st.sidebar.slider("Spin Speed (RPM)", 500, 5000, 3000)
+
+    k_val = RESIST_CONSTANTS["AZ 1505"]
+    thickness_um = k_val / np.sqrt(rpm)
+
+    st.session_state.current_thickness = thickness_um
+
+    st.sidebar.markdown(f"**Thickness:** {thickness_um:.3f} µm")
+
+    step = st.sidebar.radio(
+        "Select Step",
+        ["1. Spin Coating", "2. Layer Stack", "3. Exposure", "4. Development"]
+    )
+
     size = 12
     dx = 1 / size
 
-    # -------------------
-    # STEP 1: SPIN COATING
-    # -------------------
-    st.subheader("Step 1: Spin Coating")
+    substrate_h = 200
+    sio2_h = 200
+    resist_h = thickness_um * 100
 
-    rpm = st.slider("Spin Speed (RPM)", 500, 5000, 3000)
-    thickness = calculate_thickness(rpm)
-    st.session_state.current_thickness = thickness * 100  # scaled for 3D
+    # STEP 1
+    if step == "1. Spin Coating":
+        fig = go.Figure()
+        fig.add_trace(create_block(0,0,1,1,0,substrate_h,"gray"))
+        fig.add_trace(create_block(0,0,1,1,substrate_h,sio2_h,"blue"))
+        fig.add_trace(create_block(0,0,1,1,substrate_h+sio2_h,resist_h,"orange"))
 
-    st.write(f"Thickness: **{thickness:.3f} µm**")
+        st.plotly_chart(fig, use_container_width=True)
 
-    # -------------------
-    # STEP 2: STACK BUILD
-    # -------------------
-    st.subheader("Step 2: Layer Formation")
+    # STEP 2
+    elif step == "2. Layer Stack":
+        fig = go.Figure()
+        fig.add_trace(create_block(0,0,1,1,0,substrate_h,"gray"))
+        fig.add_trace(create_block(0,0,1,1,substrate_h,sio2_h,"blue"))
+        fig.add_trace(create_block(0,0,1,1,substrate_h+sio2_h,resist_h,"orange"))
 
-    sio2_thickness = 200
-    resist_thickness = st.session_state.current_thickness
+        st.plotly_chart(fig, use_container_width=True)
 
-    fig2 = go.Figure()
-    fig2.add_trace(create_block(0,0,1,1,0,200,"gray"))
-    fig2.add_trace(create_block(0,0,1,1,200,sio2_thickness,"blue"))
-    fig2.add_trace(create_block(0,0,1,1,200+sio2_thickness,resist_thickness,"orange"))
+    # STEP 3
+    elif step == "3. Exposure":
+        pattern = st.selectbox("Mask Pattern", ["Lines", "Dots", "Square"])
+        mask = generate_mask(size, pattern)
 
-    st.plotly_chart(fig2, use_container_width=True)
+        fig = go.Figure()
+        fig.add_trace(create_block(0,0,1,1,0,substrate_h,"gray"))
+        fig.add_trace(create_block(0,0,1,1,substrate_h,sio2_h,"blue"))
 
-    # -------------------
-    # STEP 3: EXPOSURE
-    # -------------------
-    st.subheader("Step 3: Exposure")
-
-    pattern = st.selectbox("Mask Pattern", ["Lines", "Dots", "Square"])
-    mask = generate_mask(size, pattern)
-
-    fig3 = go.Figure()
-    fig3.add_trace(create_block(0,0,1,1,0,200,"gray"))
-    fig3.add_trace(create_block(0,0,1,1,200,sio2_thickness,"blue"))
-
-    for i in range(size):
-        for j in range(size):
-            x0, y0 = i*dx, j*dx
-            exposed = mask[i,j] == 1
-
-            color = "red" if exposed else "orange"
-
-            fig3.add_trace(create_block(
-                x0, y0, dx, dx,
-                200 + sio2_thickness,
-                resist_thickness,
-                color
-            ))
-
-            if exposed:
-                fig3.add_trace(create_block(
-                    x0, y0, dx, dx,
-                    200 + sio2_thickness + resist_thickness,
-                    150,
-                    "yellow",
-                    opacity=0.2
-                ))
-
-    st.plotly_chart(fig3, use_container_width=True)
-
-    # -------------------
-    # STEP 4: DEVELOPMENT
-    # -------------------
-    st.subheader("Step 4: Development")
-
-    fig4 = go.Figure()
-    fig4.add_trace(create_block(0,0,1,1,0,200,"gray"))
-    fig4.add_trace(create_block(0,0,1,1,200,sio2_thickness,"blue"))
-
-    for i in range(size):
-        for j in range(size):
-            if mask[i,j] == 0:
+        for i in range(size):
+            for j in range(size):
                 x0, y0 = i*dx, j*dx
+                exposed = mask[i,j] == 1
 
-                fig4.add_trace(create_block(
+                color = "red" if exposed else "orange"
+
+                fig.add_trace(create_block(
                     x0, y0, dx, dx,
-                    200 + sio2_thickness,
-                    resist_thickness,
-                    "green"
+                    substrate_h + sio2_h,
+                    resist_h,
+                    color
                 ))
 
-    st.plotly_chart(fig4, use_container_width=True)
+                if exposed:
+                    fig.add_trace(create_block(
+                        x0, y0, dx, dx,
+                        substrate_h + sio2_h + resist_h,
+                        150,
+                        "yellow",
+                        opacity=0.2
+                    ))
+
+        st.plotly_chart(fig, use_container_width=True)
+
+    # STEP 4
+    elif step == "4. Development":
+        pattern = st.selectbox("Mask Pattern", ["Lines", "Dots", "Square"])
+        mask = generate_mask(size, pattern)
+
+        fig = go.Figure()
+        fig.add_trace(create_block(0,0,1,1,0,substrate_h,"gray"))
+        fig.add_trace(create_block(0,0,1,1,substrate_h,sio2_h,"blue"))
+
+        for i in range(size):
+            for j in range(size):
+                if mask[i,j] == 0:
+                    x0, y0 = i*dx, j*dx
+
+                    fig.add_trace(create_block(
+                        x0, y0, dx, dx,
+                        substrate_h + sio2_h,
+                        resist_h,
+                        "green"
+                    ))
+
+        st.plotly_chart(fig, use_container_width=True)
 
 # -------------------------------
 # QUIZ
